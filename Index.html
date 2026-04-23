@@ -1,0 +1,2374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRISM — Audio Visualizer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&display=swap');
+
+  :root {
+    --bg: #000;
+    --fg: #fff;
+    --mid: #888;
+    --dim: #222;
+    --accent: #fff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Space Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid #1a1a1a;
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.3em;
+    background: linear-gradient(90deg, #fff 0%, #888 50%, #fff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .tagline {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--mid);
+    text-transform: uppercase;
+  }
+
+  /* INPUT CONTROLS */
+  .controls-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 32px;
+    border-bottom: 1px solid #1a1a1a;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 8px 18px;
+    border: 1px solid #333;
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--rainbow-grad);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .btn:hover::before { opacity: 0.12; }
+  .btn:hover { border-color: #fff; }
+  .btn.active {
+    border-color: #fff;
+    background: #fff;
+    color: #000;
+  }
+  .btn.active::before { opacity: 0; }
+
+  .sep { width: 1px; height: 28px; background: #222; flex-shrink: 0; }
+
+  .vis-label {
+    font-size: 0.6rem;
+    color: var(--mid);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* MAIN CANVAS AREA */
+  .canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  canvas#viz {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* MODE SELECTOR — horizontal scroll */
+  .mode-strip {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    border-top: 1px solid #1a1a1a;
+    flex-shrink: 0;
+    scrollbar-width: none;
+    height: 42px;
+  }
+  .mode-strip::-webkit-scrollbar { display: none; }
+
+  .mode-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0 16px;
+    border: none;
+    border-right: 1px solid #111;
+    background: transparent;
+    color: #555;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    height: 100%;
+  }
+  .mode-btn:hover { color: #fff; background: #0d0d0d; }
+  .mode-btn.active {
+    color: #000;
+    background: #fff;
+    font-weight: 700;
+  }
+
+  /* SETTINGS PANEL */
+  .settings-panel {
+    position: absolute;
+    top: 0; right: 0;
+    width: 260px;
+    height: 100%;
+    background: rgba(0,0,0,0.92);
+    border-left: 1px solid #1a1a1a;
+    padding: 20px;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    overflow-y: auto;
+    z-index: 20;
+    backdrop-filter: blur(10px);
+  }
+  .settings-panel.open { transform: translateX(0); }
+  .settings-panel h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.2em;
+    margin-bottom: 18px;
+    color: var(--fg);
+  }
+  .setting-row {
+    margin-bottom: 14px;
+  }
+  .setting-row label {
+    display: block;
+    font-size: 0.55rem;
+    letter-spacing: 0.12em;
+    color: var(--mid);
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .setting-row input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 2px;
+    background: #333;
+    outline: none;
+    cursor: pointer;
+  }
+  .setting-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  .setting-row select {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    background: #111;
+    color: #fff;
+    border: 1px solid #333;
+    padding: 5px 8px;
+    width: 100%;
+    cursor: pointer;
+    outline: none;
+  }
+  .val-display {
+    float: right;
+    font-size: 0.55rem;
+    color: #888;
+    margin-top: -16px;
+  }
+
+  /* STATUS */
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #333;
+    display: inline-block;
+    margin-right: 6px;
+    transition: background 0.3s;
+  }
+  .status-dot.active { background: #fff; box-shadow: 0 0 6px #fff; }
+  .status-text { font-size: 0.6rem; color: var(--mid); letter-spacing: 0.1em; }
+
+  /* RAINBOW ACCENT LINE */
+  .rainbow-line {
+    height: 2px;
+    background: linear-gradient(90deg,
+      #ff0000, #ff4500, #ff8c00, #ffd700,
+      #adff2f, #00ff00, #00fa9a, #00bfff,
+      #1e90ff, #7b68ee, #9400d3, #ff1493, #ff0000);
+    background-size: 200% 100%;
+    animation: rainbowShift 4s linear infinite;
+    flex-shrink: 0;
+    height: 1.5px;
+  }
+  @keyframes rainbowShift {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
+  }
+
+  /* Overlay text */
+  .overlay-msg {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    text-align: center;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.5s;
+  }
+  .overlay-msg.hidden { opacity: 0; }
+  .overlay-msg h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    letter-spacing: 0.3em;
+    color: #fff;
+    opacity: 0.08;
+  }
+  .overlay-msg p {
+    font-size: 0.6rem;
+    color: #333;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  /* Scrollbar */
+  .settings-panel::-webkit-scrollbar { width: 3px; }
+  .settings-panel::-webkit-scrollbar-thumb { background: #333; }
+
+  #fileInput { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">PRISM</div>
+    <div class="tagline">Audio Visualizer</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="status-dot" id="statusDot"></span>
+    <span class="status-text" id="statusText">NO INPUT</span>
+  </div>
+</header>
+<div class="rainbow-line"></div>
+
+<div class="controls-bar">
+  <input type="file" id="fileInput" accept="audio/*">
+  <button class="btn" id="fileBtn" onclick="document.getElementById('fileInput').click()">⬆ Load File</button>
+  <button class="btn" id="micBtn">◉ Microphone</button>
+  <div class="sep"></div>
+  <span class="vis-label" id="modeLabel">BARS</span>
+  <div class="sep"></div>
+  <button class="btn" id="settingsBtn">⚙ Settings</button>
+  <button class="btn" id="colorBtn">◐ Color</button>
+</div>
+
+<div class="canvas-wrap" style="position:relative;">
+  <canvas id="viz"></canvas>
+  <div class="overlay-msg" id="overlay">
+    <h2>VISUALIZE</h2>
+    <p>Load a file or enable microphone</p>
+  </div>
+  <div class="settings-panel" id="settingsPanel">
+    <h3>Settings</h3>
+    <div id="settingsContent"></div>
+  </div>
+</div>
+
+<div class="mode-strip" id="modeStrip"></div>
+
+<script>
+// ── AUDIO ENGINE ──────────────────────────────────────────────────
+let audioCtx, analyser, source, micStream;
+let fftSize = 2048;
+let dataArray, bufferLength;
+let isActive = false;
+let colorMode = 0; // 0=white, 1=rainbow, 2=greyscale
+let animId;
+
+const canvas = document.getElementById('viz');
+const ctx = canvas.getContext('2d');
+
+function initAnalyser(audioSource) {
+  if (analyser) analyser.disconnect();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = fftSize;
+  analyser.smoothingTimeConstant = settings.smoothing;
+  audioSource.connect(analyser);
+  analyser.connect(audioCtx.destination);
+  bufferLength = analyser.frequencyBinCount;
+  dataArray = new Uint8Array(bufferLength);
+  isActive = true;
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('statusDot').classList.add('active');
+  document.getElementById('statusText').textContent = 'ACTIVE';
+  if (animId) cancelAnimationFrame(animId);
+  draw();
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────
+const settings = {
+  smoothing: 0.8,
+  gain: 1.5,
+  mirrorX: false,
+  mirrorY: false,
+  lineWidth: 2,
+  barGap: 1,
+  rotation: 0,
+  filled: true,
+  glow: 0.6,
+  speed: 1,
+  thickness: 2,
+  decay: 0.98,
+  zoom: 1.0,
+  hue: 0,
+  saturation: 100,
+  spread: 1.0,
+  branches: 6,
+  rippleSpeed: 2,
+  waveHeight: 1.0,
+  particleCount: 200,
+  dotSize: 3,
+  curveTension: 0.5,
+  segments: 8,
+  spiralTurns: 3,
+  kaleidScope: 8,
+  noiseAmt: 0,
+  threshold: 0.1,
+  maxFreq: 1.0,
+  minFreq: 0.0,
+};
+
+// ── VISUALIZER MODES ──────────────────────────────────────────────
+const MODES = [
+  { id:'bars', name:'Bars' },
+  { id:'bars_mirrored', name:'Mirror Bars' },
+  { id:'wave', name:'Waveform' },
+  { id:'wave_fill', name:'Wave Fill' },
+  { id:'circle_bars', name:'Circle Bars' },
+  { id:'circle_wave', name:'Circle Wave' },
+  { id:'ring_pulse', name:'Ring Pulse' },
+  { id:'dots', name:'Dot Field' },
+  { id:'scatter', name:'Scatter' },
+  { id:'lissajous', name:'Lissajous' },
+  { id:'waterfall', name:'Waterfall' },
+  { id:'spectrogram', name:'Spectrogram' },
+  { id:'kaleidoscope', name:'Kaleidoscope' },
+  { id:'spiral', name:'Spiral' },
+  { id:'helix', name:'Helix' },
+  { id:'tunnel', name:'Tunnel' },
+  { id:'radial_lines', name:'Radial Lines' },
+  { id:'sunburst', name:'Sunburst' },
+  { id:'ribbon', name:'Ribbon' },
+  { id:'3d_bars', name:'3D Bars' },
+  { id:'mesh', name:'Mesh' },
+  { id:'particles', name:'Particles' },
+  { id:'smoke', name:'Smoke' },
+  { id:'lightning', name:'Lightning' },
+  { id:'dna', name:'DNA' },
+  { id:'eq_line', name:'EQ Line' },
+  { id:'cube_grid', name:'Cube Grid' },
+  { id:'pendulum', name:'Pendulum' },
+  { id:'piano', name:'Piano' },
+  { id:'vu_meter', name:'VU Meter' },
+  { id:'neon_bars', name:'Neon Bars' },
+  { id:'fractal_bars', name:'Fractal Bars' },
+  { id:'butterfly', name:'Butterfly' },
+  { id:'mandala', name:'Mandala' },
+  { id:'constellation', name:'Constellation' },
+  { id:'terrain', name:'Terrain' },
+  { id:'pulse_rings', name:'Pulse Rings' },
+  { id:'clock_vis', name:'Soundclock' },
+  { id:'wave3d', name:'Wave 3D' },
+  { id:'flower', name:'Flower' },
+  { id:'spider', name:'Spiderweb' },
+  { id:'prism', name:'Prism' },
+  { id:'oscilloscope', name:'Oscilloscope' },
+  { id:'tape', name:'Tape' },
+  { id:'arc_reactor', name:'Arc Reactor' },
+  { id:'feathers', name:'Feathers' },
+  { id:'seismograph', name:'Seismograph' },
+  { id:'neon_wave', name:'Neon Wave' },
+  { id:'mirror_wave', name:'Mirror Wave' },
+  { id:'glitch', name:'Glitch' },
+  { id:'matrix_bars', name:'Matrix Bars' },
+  { id:'comb', name:'Comb' },
+  { id:'tree', name:'Sound Tree' },
+  { id:'hexgrid', name:'Hex Grid' },
+  { id:'orbit', name:'Orbit' },
+  { id:'bokeh', name:'Bokeh' },
+  { id:'stadium', name:'Stadium' },
+  { id:'typewriter', name:'Typewriter' },
+  { id:'barcode', name:'Barcode' },
+  { id:'halo', name:'Halo' },
+  { id:'wave_ring', name:'Wave Ring' },
+  { id:'cross', name:'Cross' },
+  { id:'double_helix', name:'Double Helix' },
+  { id:'checkerboard', name:'Checker' },
+  { id:'snowflake', name:'Snowflake' },
+  { id:'film_strip', name:'Film Strip' },
+  { id:'icicles', name:'Icicles' },
+  { id:'shockwave', name:'Shockwave' },
+  { id:'gear', name:'Gear' },
+  { id:'radar', name:'Radar' },
+  { id:'vinyl', name:'Vinyl' },
+  { id:'warp', name:'Warp Speed' },
+  { id:'hypno', name:'Hypno' },
+  { id:'rain', name:'Frequency Rain' },
+  { id:'bubbles', name:'Bubbles' },
+  { id:'blocks', name:'Blocks' },
+  { id:'weave', name:'Weave' },
+  { id:'starburst', name:'Starburst' },
+  { id:'zig', name:'Zigzag' },
+  { id:'grid_pulse', name:'Grid Pulse' },
+  { id:'vortex', name:'Vortex' },
+  { id:'topo', name:'Topography' },
+  { id:'crystal', name:'Crystal' },
+  { id:'chain', name:'Chain' },
+  { id:'globe', name:'Globe' },
+  { id:'ladder', name:'Ladder' },
+  { id:'braid', name:'Braid' },
+  { id:'ripple', name:'Ripple' },
+  { id:'arrows', name:'Arrows' },
+  { id:'chroma', name:'Chroma' },
+  { id:'moiré', name:'Moiré' },
+  { id:'spline', name:'Spline' },
+  { id:'fountain', name:'Fountain' },
+  { id:'diamond', name:'Diamond' },
+  { id:'eclipse', name:'Eclipse' },
+  { id:'horizon', name:'Horizon' },
+  { id:'comet', name:'Comet Trail' },
+  { id:'atomic', name:'Atomic' },
+  { id:'nebula', name:'Nebula' },
+  { id:'binary', name:'Binary' },
+];
+
+let currentMode = 'bars';
+
+// Build mode strip
+const strip = document.getElementById('modeStrip');
+MODES.forEach(m => {
+  const btn = document.createElement('button');
+  btn.className = 'mode-btn' + (m.id === currentMode ? ' active' : '');
+  btn.textContent = m.name;
+  btn.onclick = () => {
+    currentMode = m.id;
+    document.getElementById('modeLabel').textContent = m.name.toUpperCase();
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    btn.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
+    buildSettings();
+    // reset waterfall if needed
+    if (m.id !== 'waterfall' && m.id !== 'spectrogram') waterfallCanvas = null;
+  };
+  strip.appendChild(btn);
+});
+
+// ── SETTINGS DEFINITIONS PER MODE ────────────────────────────────
+const modeSettings = {
+  default: ['smoothing','gain','glow','colorMode'],
+  bars: ['smoothing','gain','barGap','glow','maxFreq','minFreq'],
+  bars_mirrored: ['smoothing','gain','barGap','glow'],
+  wave: ['smoothing','gain','lineWidth','waveHeight'],
+  wave_fill: ['smoothing','gain','waveHeight','glow'],
+  circle_bars: ['smoothing','gain','barGap','rotation','spread'],
+  circle_wave: ['smoothing','gain','lineWidth','rotation'],
+  ring_pulse: ['smoothing','gain','glow','rotation'],
+  dots: ['smoothing','gain','dotSize','spread'],
+  scatter: ['smoothing','gain','dotSize'],
+  lissajous: ['smoothing','gain','lineWidth','speed'],
+  waterfall: ['smoothing','gain','speed'],
+  spectrogram: ['smoothing','gain'],
+  kaleidoscope: ['smoothing','gain','kaleidScope','glow'],
+  spiral: ['smoothing','gain','spiralTurns','lineWidth'],
+  helix: ['smoothing','gain','lineWidth','speed'],
+  tunnel: ['smoothing','gain','zoom','glow'],
+  radial_lines: ['smoothing','gain','branches','lineWidth'],
+  sunburst: ['smoothing','gain','branches','glow'],
+  ribbon: ['smoothing','gain','lineWidth','waveHeight'],
+  '3d_bars': ['smoothing','gain','barGap'],
+  mesh: ['smoothing','gain','lineWidth'],
+  particles: ['smoothing','gain','particleCount','dotSize'],
+  smoke: ['smoothing','gain','glow'],
+  lightning: ['smoothing','gain','branches','glow'],
+  dna: ['smoothing','gain','speed','lineWidth'],
+  eq_line: ['smoothing','gain','lineWidth','curveTension'],
+  cube_grid: ['smoothing','gain','spread'],
+  pendulum: ['smoothing','gain','branches','lineWidth'],
+  piano: ['smoothing','gain'],
+  vu_meter: ['smoothing','gain','barGap'],
+  neon_bars: ['smoothing','gain','barGap','glow'],
+  fractal_bars: ['smoothing','gain','segments'],
+  butterfly: ['smoothing','gain','glow','rotation'],
+  mandala: ['smoothing','gain','kaleidScope','glow'],
+  constellation: ['smoothing','gain','dotSize','lineWidth'],
+  terrain: ['smoothing','gain','waveHeight'],
+  pulse_rings: ['smoothing','gain','glow','rippleSpeed'],
+  clock_vis: ['smoothing','gain'],
+  wave3d: ['smoothing','gain','segments','waveHeight'],
+  flower: ['smoothing','gain','branches','glow'],
+  spider: ['smoothing','gain','branches','lineWidth'],
+  prism: ['smoothing','gain','glow'],
+  oscilloscope: ['smoothing','gain','lineWidth'],
+  tape: ['smoothing','gain','speed'],
+  arc_reactor: ['smoothing','gain','glow','rotation'],
+  feathers: ['smoothing','gain','spread','glow'],
+  seismograph: ['smoothing','gain','lineWidth','speed'],
+  neon_wave: ['smoothing','gain','lineWidth','glow'],
+  mirror_wave: ['smoothing','gain','waveHeight'],
+  glitch: ['smoothing','gain'],
+  matrix_bars: ['smoothing','gain','speed'],
+  comb: ['smoothing','gain','barGap'],
+  tree: ['smoothing','gain','branches','lineWidth'],
+  hexgrid: ['smoothing','gain'],
+  orbit: ['smoothing','gain','branches','speed'],
+  bokeh: ['smoothing','gain','dotSize','glow'],
+  stadium: ['smoothing','gain','barGap'],
+  barcode: ['smoothing','gain'],
+  halo: ['smoothing','gain','glow','rotation'],
+  wave_ring: ['smoothing','gain','lineWidth','rotation'],
+  cross: ['smoothing','gain','lineWidth','glow'],
+  snowflake: ['smoothing','gain','branches'],
+  shockwave: ['smoothing','gain','glow'],
+  radar: ['smoothing','gain','rotation'],
+  vinyl: ['smoothing','gain','rotation','glow'],
+  rain: ['smoothing','gain','speed'],
+  bubbles: ['smoothing','gain','dotSize'],
+  vortex: ['smoothing','gain','spiralTurns','speed'],
+  crystal: ['smoothing','gain','branches','glow'],
+  ripple: ['smoothing','gain','rippleSpeed','glow'],
+  fountain: ['smoothing','gain','spread','glow'],
+  diamond: ['smoothing','gain','lineWidth','glow'],
+  eclipse: ['smoothing','gain','glow'],
+  horizon: ['smoothing','gain','waveHeight'],
+  comet: ['smoothing','gain','speed','glow'],
+  atomic: ['smoothing','gain','branches','rotation'],
+  nebula: ['smoothing','gain','glow','particleCount'],
+};
+
+const settingDefs = {
+  smoothing: { label: 'Smoothing', min: 0, max: 0.99, step: 0.01, key: 'smoothing' },
+  gain:      { label: 'Gain', min: 0.1, max: 5, step: 0.1, key: 'gain' },
+  glow:      { label: 'Glow', min: 0, max: 2, step: 0.05, key: 'glow' },
+  lineWidth:  { label: 'Line Width', min: 0.5, max: 10, step: 0.5, key: 'lineWidth' },
+  barGap:    { label: 'Bar Gap', min: 0, max: 10, step: 0.5, key: 'barGap' },
+  rotation:  { label: 'Rotation', min: 0, max: 360, step: 1, key: 'rotation' },
+  waveHeight: { label: 'Wave Height', min: 0.1, max: 3, step: 0.1, key: 'waveHeight' },
+  speed:     { label: 'Speed', min: 0.1, max: 5, step: 0.1, key: 'speed' },
+  spread:    { label: 'Spread', min: 0.1, max: 2, step: 0.1, key: 'spread' },
+  branches:  { label: 'Branches', min: 2, max: 16, step: 1, key: 'branches' },
+  dotSize:   { label: 'Dot Size', min: 1, max: 12, step: 0.5, key: 'dotSize' },
+  curveTension: { label: 'Curve', min: 0, max: 1, step: 0.05, key: 'curveTension' },
+  segments:  { label: 'Segments', min: 4, max: 32, step: 1, key: 'segments' },
+  spiralTurns: { label: 'Turns', min: 1, max: 8, step: 0.5, key: 'spiralTurns' },
+  kaleidScope: { label: 'Symmetry', min: 2, max: 16, step: 1, key: 'kaleidScope' },
+  particleCount: { label: 'Particles', min: 20, max: 600, step: 10, key: 'particleCount' },
+  zoom:      { label: 'Zoom', min: 0.2, max: 3, step: 0.1, key: 'zoom' },
+  rippleSpeed: { label: 'Ripple Speed', min: 0.5, max: 5, step: 0.1, key: 'rippleSpeed' },
+  maxFreq:   { label: 'Max Freq', min: 0.1, max: 1, step: 0.05, key: 'maxFreq' },
+  minFreq:   { label: 'Min Freq', min: 0, max: 0.9, step: 0.05, key: 'minFreq' },
+};
+
+function buildSettings() {
+  const panel = document.getElementById('settingsContent');
+  panel.innerHTML = '';
+  const keys = modeSettings[currentMode] || modeSettings.default;
+
+  // Color mode row
+  const colorRow = document.createElement('div');
+  colorRow.className = 'setting-row';
+  colorRow.innerHTML = `<label>Color Mode</label>
+    <select onchange="colorMode=parseInt(this.value)">
+      <option value="0" ${colorMode===0?'selected':''}>White</option>
+      <option value="1" ${colorMode===1?'selected':''}>Rainbow</option>
+      <option value="2" ${colorMode===2?'selected':''}>Greyscale</option>
+      <option value="3" ${colorMode===3?'selected':''}>Inverted</option>
+    </select>`;
+  panel.appendChild(colorRow);
+
+  keys.forEach(k => {
+    const def = settingDefs[k];
+    if (!def) return;
+    const row = document.createElement('div');
+    row.className = 'setting-row';
+    const val = settings[def.key];
+    row.innerHTML = `<label>${def.label} <span class="val-display" id="val_${k}">${val}</span></label>
+      <input type="range" min="${def.min}" max="${def.max}" step="${def.step}" value="${val}"
+        oninput="settings['${def.key}']=parseFloat(this.value);
+                 document.getElementById('val_${k}').textContent=this.value;
+                 if('${k}'==='smoothing'&&analyser)analyser.smoothingTimeConstant=parseFloat(this.value);">`;
+    panel.appendChild(row);
+  });
+}
+buildSettings();
+
+// ── COLOUR HELPERS ────────────────────────────────────────────────
+function getColor(i, total, amp=1) {
+  if (colorMode === 0) return `rgba(255,255,255,${0.15+amp*0.85})`;
+  if (colorMode === 1) {
+    const h = (i/total*360 + settings.hue) % 360;
+    return `hsla(${h},${settings.saturation}%,${40+amp*50}%,${0.3+amp*0.7})`;
+  }
+  if (colorMode === 2) {
+    const v = Math.round(amp*255);
+    return `rgb(${v},${v},${v})`;
+  }
+  if (colorMode === 3) {
+    const v = Math.round((1-amp)*255);
+    return `rgb(${v},${v},${v})`;
+  }
+  return '#fff';
+}
+function applyGlow(c, size=0) {
+  ctx.shadowColor = colorMode===1 ? `hsl(${(Date.now()/20)%360},100%,70%)` : '#fff';
+  ctx.shadowBlur = settings.glow * (20 + size);
+}
+function clearGlow() { ctx.shadowBlur = 0; }
+
+// ── WATERFALL BUFFER ──────────────────────────────────────────────
+let waterfallCanvas = null;
+let waterfallCtx = null;
+
+// ── PARTICLE SYSTEM ───────────────────────────────────────────────
+let particles = [];
+function spawnParticles(W,H) {
+  while(particles.length < settings.particleCount) {
+    particles.push({
+      x: W/2 + (Math.random()-0.5)*W*0.5,
+      y: H/2 + (Math.random()-0.5)*H*0.5,
+      vx: (Math.random()-0.5)*2,
+      vy: (Math.random()-0.5)*2,
+      life: Math.random(),
+      freq: Math.floor(Math.random() * (bufferLength||256)),
+    });
+  }
+  while(particles.length > settings.particleCount) particles.pop();
+}
+
+// ── MAIN DRAW ─────────────────────────────────────────────────────
+let t = 0;
+function draw() {
+  animId = requestAnimationFrame(draw);
+  t += 0.016 * settings.speed;
+
+  const W = canvas.width, H = canvas.height;
+  const data = dataArray || new Uint8Array(256);
+  if (analyser) analyser.getByteFrequencyData(data);
+
+  const avg = data.reduce((a,b)=>a+b,0) / data.length / 255 * settings.gain;
+
+  ctx.clearRect(0,0,W,H);
+
+  switch(currentMode) {
+    case 'bars': drawBars(W,H,data,false); break;
+    case 'bars_mirrored': drawBars(W,H,data,true); break;
+    case 'wave': drawWave(W,H,false); break;
+    case 'wave_fill': drawWave(W,H,true); break;
+    case 'circle_bars': drawCircleBars(W,H,data); break;
+    case 'circle_wave': drawCircleWave(W,H); break;
+    case 'ring_pulse': drawRingPulse(W,H,data,avg); break;
+    case 'dots': drawDots(W,H,data); break;
+    case 'scatter': drawScatter(W,H,data); break;
+    case 'lissajous': drawLissajous(W,H); break;
+    case 'waterfall': drawWaterfall(W,H,data); break;
+    case 'spectrogram': drawSpectrogram(W,H,data); break;
+    case 'kaleidoscope': drawKaleidoscope(W,H,data); break;
+    case 'spiral': drawSpiral(W,H,data); break;
+    case 'helix': drawHelix(W,H,data); break;
+    case 'tunnel': drawTunnel(W,H,data,avg); break;
+    case 'radial_lines': drawRadialLines(W,H,data); break;
+    case 'sunburst': drawSunburst(W,H,data); break;
+    case 'ribbon': drawRibbon(W,H); break;
+    case '3d_bars': draw3DBars(W,H,data); break;
+    case 'mesh': drawMesh(W,H,data); break;
+    case 'particles': drawParticles(W,H,data); break;
+    case 'smoke': drawSmoke(W,H,data,avg); break;
+    case 'lightning': drawLightning(W,H,data,avg); break;
+    case 'dna': drawDNA(W,H,data); break;
+    case 'eq_line': drawEQLine(W,H,data); break;
+    case 'cube_grid': drawCubeGrid(W,H,data); break;
+    case 'pendulum': drawPendulum(W,H,data); break;
+    case 'piano': drawPiano(W,H,data); break;
+    case 'vu_meter': drawVUMeter(W,H,data); break;
+    case 'neon_bars': drawNeonBars(W,H,data); break;
+    case 'fractal_bars': drawFractalBars(W,H,data); break;
+    case 'butterfly': drawButterfly(W,H,data,avg); break;
+    case 'mandala': drawMandala(W,H,data); break;
+    case 'constellation': drawConstellation(W,H,data); break;
+    case 'terrain': drawTerrain(W,H,data); break;
+    case 'pulse_rings': drawPulseRings(W,H,avg); break;
+    case 'clock_vis': drawClock(W,H,data); break;
+    case 'wave3d': drawWave3D(W,H,data); break;
+    case 'flower': drawFlower(W,H,data,avg); break;
+    case 'spider': drawSpider(W,H,data); break;
+    case 'prism': drawPrism(W,H,data,avg); break;
+    case 'oscilloscope': drawOscilloscope(W,H); break;
+    case 'tape': drawTape(W,H,data); break;
+    case 'arc_reactor': drawArcReactor(W,H,data,avg); break;
+    case 'seismograph': drawSeismograph(W,H,data); break;
+    case 'neon_wave': drawNeonWave(W,H,data); break;
+    case 'mirror_wave': drawMirrorWave(W,H); break;
+    case 'glitch': drawGlitch(W,H,data); break;
+    case 'matrix_bars': drawMatrixBars(W,H,data); break;
+    case 'comb': drawComb(W,H,data); break;
+    case 'tree': drawTree(W,H,data,avg); break;
+    case 'hexgrid': drawHexGrid(W,H,data); break;
+    case 'orbit': drawOrbit(W,H,data,avg); break;
+    case 'bokeh': drawBokeh(W,H,data,avg); break;
+    case 'stadium': drawStadium(W,H,data); break;
+    case 'barcode': drawBarcode(W,H,data); break;
+    case 'halo': drawHalo(W,H,avg); break;
+    case 'wave_ring': drawWaveRing(W,H,data); break;
+    case 'cross': drawCross(W,H,data); break;
+    case 'snowflake': drawSnowflake(W,H,data,avg); break;
+    case 'shockwave': drawShockwave(W,H,avg); break;
+    case 'radar': drawRadar(W,H,data,avg); break;
+    case 'vinyl': drawVinyl(W,H,data,avg); break;
+    case 'rain': drawRain(W,H,data); break;
+    case 'bubbles': drawBubbles(W,H,data,avg); break;
+    case 'vortex': drawVortex(W,H,data); break;
+    case 'crystal': drawCrystal(W,H,data,avg); break;
+    case 'ripple': drawRipple(W,H,avg); break;
+    case 'fountain': drawFountain(W,H,data,avg); break;
+    case 'diamond': drawDiamond(W,H,data,avg); break;
+    case 'eclipse': drawEclipse(W,H,avg); break;
+    case 'horizon': drawHorizon(W,H,data); break;
+    case 'comet': drawComet(W,H,data,avg); break;
+    case 'atomic': drawAtomic(W,H,data,avg); break;
+    case 'nebula': drawNebula(W,H,data,avg); break;
+    default: drawBars(W,H,data,false);
+  }
+}
+
+// ── RESIZE ────────────────────────────────────────────────────────
+function resize() {
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  waterfallCanvas = null;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── VISUALIZER FUNCTIONS ─────────────────────────────────────────
+
+function getFreqSlice(data) {
+  const start = Math.floor(settings.minFreq * data.length);
+  const end = Math.floor(settings.maxFreq * data.length);
+  return data.slice(start, end);
+}
+
+function drawBars(W,H,data,mirrored) {
+  const slice = getFreqSlice(data);
+  const n = slice.length;
+  const bw = (W / n) - settings.barGap;
+  for (let i=0;i<n;i++) {
+    const amp = Math.min(1, slice[i]/255 * settings.gain);
+    const bh = amp * H * (mirrored ? 0.5 : 1);
+    applyGlow(ctx, amp*20);
+    ctx.fillStyle = getColor(i,n,amp);
+    if (mirrored) {
+      ctx.fillRect(i*(bw+settings.barGap), H/2-bh, bw, bh);
+      ctx.fillRect(i*(bw+settings.barGap), H/2, bw, bh);
+    } else {
+      ctx.fillRect(i*(bw+settings.barGap), H-bh, bw, bh);
+    }
+  }
+  clearGlow();
+}
+
+function drawWave(W,H,filled) {
+  const wdata = new Uint8Array(bufferLength||256);
+  if (analyser) analyser.getByteTimeDomainData(wdata);
+  ctx.beginPath();
+  ctx.lineWidth = settings.lineWidth;
+  applyGlow();
+  const n = wdata.length;
+  for (let i=0;i<n;i++) {
+    const v = (wdata[i]/128-1) * settings.waveHeight;
+    const x = i/n*W;
+    const y = H/2 + v*(H/2);
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  if (filled) {
+    ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+    ctx.fillStyle = getColor(0,1,0.5);
+    ctx.fill();
+  } else {
+    ctx.strokeStyle = getColor(0,1,0.9);
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawCircleBars(W,H,data) {
+  const cx=W/2, cy=H/2, r=Math.min(W,H)*0.25;
+  const n = Math.min(data.length, 180);
+  for (let i=0;i<n;i++) {
+    const amp = Math.min(1, data[i]/255*settings.gain);
+    const angle = (i/n)*Math.PI*2 + settings.rotation*Math.PI/180;
+    const len = amp * r * settings.spread;
+    applyGlow(ctx, amp*15);
+    ctx.strokeStyle = getColor(i,n,amp);
+    ctx.lineWidth = Math.max(1,3-settings.barGap*0.3);
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(angle)*r, cy+Math.sin(angle)*r);
+    ctx.lineTo(cx+Math.cos(angle)*(r+len), cy+Math.sin(angle)*(r+len));
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawCircleWave(W,H) {
+  const wdata = new Uint8Array(bufferLength||256);
+  if (analyser) analyser.getByteTimeDomainData(wdata);
+  const cx=W/2, cy=H/2, r=Math.min(W,H)*0.28;
+  ctx.beginPath();
+  ctx.lineWidth = settings.lineWidth;
+  applyGlow();
+  const n = wdata.length;
+  for (let i=0;i<=n;i++) {
+    const v = (wdata[i%n]/128-1)*settings.waveHeight;
+    const angle = (i/n)*Math.PI*2 + settings.rotation*Math.PI/180;
+    const rr = r + v*r*0.5;
+    const x = cx + Math.cos(angle)*rr;
+    const y = cy + Math.sin(angle)*rr;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = getColor(0,1,0.9);
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawRingPulse(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const rings = 6;
+  for(let r=0;r<rings;r++) {
+    const amp = data[Math.floor(r/rings*data.length)]/255*settings.gain;
+    const radius = (r+1)/(rings)*Math.min(W,H)*0.4 * (1+amp*0.3);
+    applyGlow(ctx,amp*30);
+    ctx.beginPath();
+    ctx.arc(cx,cy,radius,0,Math.PI*2);
+    ctx.strokeStyle=getColor(r,rings,amp);
+    ctx.lineWidth=settings.lineWidth;
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawDots(W,H,data) {
+  const n = Math.min(data.length, 128);
+  const cols = Math.ceil(Math.sqrt(n));
+  for (let i=0;i<n;i++) {
+    const amp=Math.min(1,data[i]/255*settings.gain);
+    const col=i%cols, row=Math.floor(i/cols);
+    const x=col/cols*W + W/cols/2;
+    const y=row/Math.ceil(n/cols)*H + H/Math.ceil(n/cols)/2;
+    applyGlow(ctx,amp*10);
+    ctx.beginPath();
+    ctx.arc(x,y,settings.dotSize*amp*settings.spread,0,Math.PI*2);
+    ctx.fillStyle=getColor(i,n,amp);
+    ctx.fill();
+  }
+  clearGlow();
+}
+
+function drawScatter(W,H,data) {
+  const n=data.length;
+  for(let i=0;i<n;i+=2){
+    const a1=data[i]/255*settings.gain, a2=data[Math.min(i+1,n-1)]/255*settings.gain;
+    const x=a1*W, y=a2*H;
+    ctx.beginPath();
+    ctx.arc(x,y,settings.dotSize,0,Math.PI*2);
+    ctx.fillStyle=getColor(i,n,(a1+a2)/2);
+    ctx.fill();
+  }
+}
+
+function drawLissajous(W,H) {
+  const wdata=new Uint8Array(bufferLength||512);
+  if(analyser) analyser.getByteTimeDomainData(wdata);
+  const n=wdata.length;
+  ctx.beginPath();
+  ctx.lineWidth=settings.lineWidth;
+  applyGlow();
+  for(let i=0;i<n-1;i++){
+    const x=(wdata[i]/128-1)*W*0.45*settings.gain+W/2;
+    const y=(wdata[Math.floor(i*1.01)%n]/128-1)*H*0.45*settings.gain+H/2;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle=getColor(0,1,0.9);
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawWaterfall(W,H,data) {
+  if(!waterfallCanvas){
+    waterfallCanvas=document.createElement('canvas');
+    waterfallCanvas.width=W; waterfallCanvas.height=H;
+    waterfallCtx=waterfallCanvas.getContext('2d');
+  }
+  const img=waterfallCtx.getImageData(0,0,W,H);
+  waterfallCtx.putImageData(img,0,Math.ceil(settings.speed*2));
+  const n=Math.min(data.length,W);
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const col=colorMode===1?`hsl(${i/n*360},100%,${amp*70}%)`:
+              `rgb(${Math.round(amp*255)},${Math.round(amp*255)},${Math.round(amp*255)})`;
+    waterfallCtx.fillStyle=col;
+    waterfallCtx.fillRect(i/n*W,0,W/n+1,Math.ceil(settings.speed*2)+1);
+  }
+  ctx.drawImage(waterfallCanvas,0,0);
+}
+
+function drawSpectrogram(W,H,data) {
+  if(!waterfallCanvas){
+    waterfallCanvas=document.createElement('canvas');
+    waterfallCanvas.width=W; waterfallCanvas.height=H;
+    waterfallCtx=waterfallCanvas.getContext('2d');
+    waterfallCtx.fillStyle='#000';
+    waterfallCtx.fillRect(0,0,W,H);
+  }
+  const imgData=waterfallCtx.getImageData(0,0,W,H);
+  const d=imgData.data;
+  for(let y=H-1;y>0;y--){
+    for(let x=0;x<W;x++){
+      const idx=(y*W+x)*4, prev=((y-1)*W+x)*4;
+      d[idx]=d[prev]; d[idx+1]=d[prev+1]; d[idx+2]=d[prev+2]; d[idx+3]=d[prev+3];
+    }
+  }
+  for(let i=0;i<W;i++){
+    const fi=Math.floor(i/W*data.length);
+    const amp=data[fi]/255;
+    const idx=i*4;
+    if(colorMode===1){
+      const h=(amp*240);
+      const [r,g,b]=hslToRgb(h/360,1,amp*0.6);
+      d[idx]=r; d[idx+1]=g; d[idx+2]=b; d[idx+3]=255;
+    } else {
+      const v=Math.round(amp*255);
+      d[idx]=v; d[idx+1]=v; d[idx+2]=v; d[idx+3]=255;
+    }
+  }
+  waterfallCtx.putImageData(imgData,0,0);
+  ctx.drawImage(waterfallCanvas,0,0);
+}
+
+function hslToRgb(h,s,l){
+  const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q;
+  return [hue2rgb(p,q,h+1/3),hue2rgb(p,q,h),hue2rgb(p,q,h-1/3)].map(v=>Math.round(v*255));
+}
+function hue2rgb(p,q,t){
+  if(t<0)t+=1; if(t>1)t-=1;
+  if(t<1/6)return p+(q-p)*6*t;
+  if(t<1/2)return q;
+  if(t<2/3)return p+(q-p)*(2/3-t)*6;
+  return p;
+}
+
+function drawKaleidoscope(W,H,data) {
+  const cx=W/2,cy=H/2;
+  const slices=settings.kaleidScope;
+  ctx.save();
+  ctx.translate(cx,cy);
+  for(let s=0;s<slices;s++){
+    ctx.save();
+    ctx.rotate(s/slices*Math.PI*2);
+    const n=Math.min(data.length,60);
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const amp=data[i]/255*settings.gain;
+      const r=(i/n)*Math.min(W,H)*0.45;
+      const angle=(i/n)*Math.PI/slices;
+      const x=Math.cos(angle)*r, y=Math.sin(angle)*r*amp;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    applyGlow();
+    ctx.strokeStyle=getColor(s,slices,0.8);
+    ctx.lineWidth=settings.lineWidth;
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+  clearGlow();
+}
+
+function drawSpiral(W,H,data) {
+  const cx=W/2,cy=H/2;
+  ctx.beginPath();
+  ctx.lineWidth=settings.lineWidth;
+  const turns=settings.spiralTurns;
+  const n=200;
+  for(let i=0;i<n;i++){
+    const fi=Math.floor(i/n*data.length);
+    const amp=data[fi]/255*settings.gain;
+    const angle=i/n*Math.PI*2*turns;
+    const r=(i/n)*Math.min(W,H)*0.44*(1+amp*0.2);
+    const x=cx+Math.cos(angle)*r, y=cy+Math.sin(angle)*r;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  applyGlow();
+  if(colorMode===1){
+    const grad=ctx.createLinearGradient(0,0,W,H);
+    for(let s=0;s<=1;s+=0.1) grad.addColorStop(s,`hsl(${s*360},100%,60%)`);
+    ctx.strokeStyle=grad;
+  } else {
+    ctx.strokeStyle=getColor(0,1,0.9);
+  }
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawHelix(W,H,data) {
+  const n=data.length;
+  ctx.lineWidth=settings.lineWidth;
+  applyGlow();
+  ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const x=i/n*W;
+    const y=H/2+Math.sin(i*0.1+t)*H*0.3*amp;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle=getColor(0,1,0.9);
+  ctx.stroke();
+  ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const x=i/n*W;
+    const y=H/2-Math.sin(i*0.1+t)*H*0.3*amp;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle=getColor(Math.floor(n/2),n,0.6);
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawTunnel(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const rings=12;
+  for(let r=rings;r>0;r--){
+    const fi=Math.floor(r/rings*data.length);
+    const amp=data[fi]/255*settings.gain;
+    const sz=(r/rings)*Math.min(W,H)*0.5*settings.zoom*(1+avg*0.2);
+    ctx.beginPath();
+    ctx.rect(cx-sz,cy-sz,sz*2,sz*2);
+    ctx.strokeStyle=getColor(r,rings,amp);
+    ctx.lineWidth=1+amp*2;
+    applyGlow(ctx,amp*20);
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawRadialLines(W,H,data) {
+  const cx=W/2,cy=H/2;
+  const n=settings.branches*8;
+  for(let i=0;i<n;i++){
+    const amp=data[Math.floor(i/n*data.length)]/255*settings.gain;
+    const angle=i/n*Math.PI*2+settings.rotation*Math.PI/180;
+    const r=Math.min(W,H)*0.45*amp;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(angle)*r,cy+Math.sin(angle)*r);
+    ctx.strokeStyle=getColor(i,n,amp);
+    ctx.lineWidth=settings.lineWidth*amp;
+    applyGlow(ctx,amp*10);
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawSunburst(W,H,data) {
+  const cx=W/2,cy=H/2;
+  const n=Math.min(data.length,100);
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const a1=i/n*Math.PI*2, a2=(i+0.8)/n*Math.PI*2;
+    const r=Math.min(W,H)*0.45*amp;
+    const r0=Math.min(W,H)*0.05;
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(a1)*r0,cy+Math.sin(a1)*r0);
+    ctx.lineTo(cx+Math.cos(a1)*r,cy+Math.sin(a1)*r);
+    ctx.arc(cx,cy,r,a1,a2);
+    ctx.lineTo(cx+Math.cos(a2)*r0,cy+Math.sin(a2)*r0);
+    ctx.closePath();
+    applyGlow(ctx,amp*15);
+    ctx.fillStyle=getColor(i,n,amp*0.7);
+    ctx.fill();
+  }
+  clearGlow();
+}
+
+function drawRibbon(W,H) {
+  const wdata=new Uint8Array(bufferLength||256);
+  if(analyser) analyser.getByteTimeDomainData(wdata);
+  const n=wdata.length;
+  ctx.lineWidth=settings.lineWidth*3;
+  applyGlow();
+  for(let j=0;j<3;j++){
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const v=(wdata[i]/128-1)*settings.waveHeight;
+      const x=i/n*W;
+      const y=H*(0.3+j*0.2)+v*H*0.12;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=getColor(j,3,0.8);
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function draw3DBars(W,H,data) {
+  const n=Math.min(data.length,80);
+  const bw=W/n;
+  const depth=6;
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const bh=amp*H*0.9;
+    const x=i*bw+settings.barGap, y=H-bh;
+    ctx.fillStyle=getColor(i,n,amp*0.5);
+    ctx.fillRect(x+depth,y-depth,bw-settings.barGap*2,bh);
+    ctx.fillStyle=getColor(i,n,amp);
+    ctx.fillRect(x,y,bw-settings.barGap*2,bh);
+    ctx.fillStyle=getColor(i,n,amp*0.7);
+    ctx.beginPath();
+    ctx.moveTo(x,y); ctx.lineTo(x+depth,y-depth);
+    ctx.lineTo(x+bw-settings.barGap*2+depth,y-depth);
+    ctx.lineTo(x+bw-settings.barGap*2,y);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawMesh(W,H,data) {
+  const cols=20, rows=12;
+  const cw=W/cols, ch=H/rows;
+  ctx.lineWidth=settings.lineWidth;
+  applyGlow();
+  for(let r=0;r<=rows;r++){
+    ctx.beginPath();
+    for(let c=0;c<=cols;c++){
+      const fi=Math.floor((r*cols+c)/(rows*cols)*data.length);
+      const amp=data[fi]/255*settings.gain;
+      const x=c*cw, y=r*ch - amp*ch*2;
+      c===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=getColor(r,rows,0.7);
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawParticles(W,H,data) {
+  spawnParticles(W,H);
+  particles.forEach(p=>{
+    const amp=data[p.freq]/255*settings.gain;
+    p.x+=p.vx*amp*settings.speed;
+    p.y+=p.vy*amp*settings.speed;
+    if(p.x<0||p.x>W) p.vx*=-1;
+    if(p.y<0||p.y>H) p.vy*=-1;
+    p.life=(p.life+0.005)%1;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,settings.dotSize*amp,0,Math.PI*2);
+    ctx.fillStyle=getColor(p.freq,data.length,amp);
+    applyGlow(ctx,amp*8);
+    ctx.fill();
+  });
+  clearGlow();
+}
+
+function drawSmoke(W,H,data,avg) {
+  ctx.fillStyle=`rgba(0,0,0,0.05)`;
+  ctx.fillRect(0,0,W,H);
+  const n=20;
+  for(let i=0;i<n;i++){
+    const amp=data[Math.floor(i/n*data.length)]/255*settings.gain;
+    const x=W/2+(Math.sin(t*0.5+i)*W*0.4);
+    const y=H-avg*H*0.8;
+    const r=amp*80*settings.glow;
+    const g=ctx.createRadialGradient(x,y,0,x,y,r);
+    g.addColorStop(0,getColor(i,n,0.3));
+    g.addColorStop(1,'transparent');
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=g; ctx.fill();
+  }
+}
+
+function drawLightning(W,H,data,avg) {
+  const cx=W/2;
+  const numBolts=Math.floor(settings.branches);
+  for(let b=0;b<numBolts;b++){
+    const fi=Math.floor(b/numBolts*data.length);
+    const amp=data[fi]/255*settings.gain;
+    if(amp<0.1) continue;
+    ctx.beginPath();
+    ctx.lineWidth=amp*3;
+    applyGlow(ctx,amp*30);
+    ctx.strokeStyle=getColor(b,numBolts,amp);
+    let x=cx+(b-numBolts/2)*60, y=0;
+    ctx.moveTo(x,y);
+    while(y<H){
+      x+=(Math.random()-0.5)*80*amp;
+      y+=30+Math.random()*20;
+      ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawDNA(W,H,data) {
+  const n=data.length;
+  ctx.lineWidth=settings.lineWidth;
+  applyGlow();
+  for(let strand=0;strand<2;strand++){
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const amp=data[i]/255*settings.gain;
+      const x=i/n*W;
+      const y=H/2+Math.sin(i*0.1+t+(strand*Math.PI))*H*0.3*amp;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=getColor(strand*n/2,n,0.9);
+    ctx.stroke();
+  }
+  // rungs
+  for(let i=0;i<n;i+=20){
+    const amp=data[i]/255*settings.gain;
+    const x=i/n*W;
+    const y1=H/2+Math.sin(i*0.1+t)*H*0.3*amp;
+    const y2=H/2+Math.sin(i*0.1+t+Math.PI)*H*0.3*amp;
+    ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2);
+    ctx.strokeStyle=getColor(i,n,amp*0.5);
+    ctx.lineWidth=1;
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawEQLine(W,H,data) {
+  const n=data.length;
+  const pts=[];
+  for(let i=0;i<n;i+=2){
+    pts.push({x:i/n*W, y:H-(data[i]/255*settings.gain*H)});
+  }
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x,pts[0].y);
+  const c=settings.curveTension;
+  for(let i=1;i<pts.length-1;i++){
+    const xc=(pts[i].x+pts[i+1].x)/2;
+    const yc=(pts[i].y+pts[i+1].y)/2;
+    ctx.quadraticCurveTo(pts[i].x,pts[i].y,xc,yc);
+  }
+  ctx.lineWidth=settings.lineWidth;
+  applyGlow();
+  if(colorMode===1){
+    const g=ctx.createLinearGradient(0,0,W,0);
+    for(let s=0;s<=1;s+=0.1) g.addColorStop(s,`hsl(${s*360},100%,60%)`);
+    ctx.strokeStyle=g;
+  } else ctx.strokeStyle=getColor(0,1,0.9);
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawCubeGrid(W,H,data) {
+  const cols=10, rows=6;
+  const cw=W/cols, ch=H/rows;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const fi=Math.floor((r*cols+c)/(rows*cols)*data.length);
+      const amp=data[fi]/255*settings.gain;
+      const x=c*cw+cw*0.1, y=r*ch+ch*0.1;
+      const s=cw*0.8*settings.spread;
+      applyGlow(ctx,amp*10);
+      ctx.fillStyle=getColor(r*cols+c,rows*cols,amp);
+      ctx.globalAlpha=0.1+amp*0.9;
+      ctx.fillRect(x,y+ch*(1-amp)*0.5,s,ch*amp*0.8);
+      ctx.globalAlpha=1;
+    }
+  }
+  clearGlow();
+}
+
+function drawPendulum(W,H,data) {
+  const cx=W/2,cy=H*0.1;
+  const n=Math.floor(settings.branches);
+  for(let i=0;i<n;i++){
+    const amp=data[Math.floor(i/n*data.length)]/255*settings.gain;
+    const angle=Math.sin(t*(0.5+i*0.1))*amp*Math.PI*0.4;
+    const len=H*0.8/n;
+    const x=cx+Math.sin(angle)*len*(i+1);
+    const y=cy+Math.cos(angle)*len*(i+1);
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(x,y);
+    ctx.strokeStyle=getColor(i,n,amp);
+    ctx.lineWidth=settings.lineWidth;
+    applyGlow(ctx,amp*15);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,8*amp,0,Math.PI*2);
+    ctx.fillStyle=getColor(i,n,amp);
+    ctx.fill();
+  }
+  clearGlow();
+}
+
+function drawPiano(W,H,data) {
+  const keys=48;
+  const kw=W/keys;
+  for(let i=0;i<keys;i++){
+    const amp=data[Math.floor(i/keys*data.length)]/255*settings.gain;
+    const isBlack=[1,3,6,8,10].includes(i%12);
+    const bh=isBlack?H*0.5:H*0.8;
+    ctx.fillStyle=isBlack?getColor(i,keys,amp):`rgba(255,255,255,${0.1+amp*0.9})`;
+    applyGlow(ctx,amp*10);
+    ctx.fillRect(i*kw+1, H-bh, kw-2, bh*(0.2+amp*0.8));
+  }
+  clearGlow();
+}
+
+function drawVUMeter(W,H,data) {
+  const bands=12;
+  const bw=W/(bands+2);
+  for(let i=0;i<bands;i++){
+    const amp=data[Math.floor(i/bands*data.length)]/255*settings.gain;
+    const segs=Math.floor(amp*20);
+    for(let s=0;s<20;s++){
+      const lit=s<segs;
+      const segH=(H-40)/20;
+      const y=H-20-(s+1)*segH;
+      const hue=s<14?120:s<17?60:0;
+      ctx.fillStyle=lit?`hsl(${hue},100%,50%)`:`rgba(255,255,255,0.05)`;
+      ctx.fillRect((i+1)*bw+settings.barGap,y,bw-settings.barGap*2,segH-2);
+    }
+  }
+}
+
+function drawNeonBars(W,H,data) {
+  const n=Math.min(data.length,128);
+  const bw=W/n;
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const bh=amp*H;
+    ctx.shadowColor=colorMode===1?`hsl(${i/n*360},100%,70%)`:'#fff';
+    ctx.shadowBlur=settings.glow*30;
+    ctx.fillStyle=getColor(i,n,amp);
+    ctx.fillRect(i*bw+settings.barGap,H-bh,bw-settings.barGap,bh);
+  }
+  clearGlow();
+}
+
+function drawFractalBars(W,H,data) {
+  const n=Math.min(data.length,settings.segments*4);
+  const drawLevel=(x,y,w,h,lvl)=>{
+    if(lvl>3||w<2) return;
+    const fi=Math.floor((x/W)*data.length);
+    const amp=data[fi]/255*settings.gain;
+    ctx.fillStyle=getColor(fi,data.length,amp);
+    ctx.fillRect(x,y,w,h*amp);
+    drawLevel(x,y+h*amp,w/2,h*0.5,lvl+1);
+    drawLevel(x+w/2,y+h*amp,w/2,h*0.5,lvl+1);
+  };
+  const bw=W/n;
+  for(let i=0;i<n;i++) drawLevel(i*bw,0,bw,H,0);
+}
+
+function drawButterfly(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  ctx.beginPath();
+  const n=200;
+  for(let i=0;i<n;i++){
+    const theta=i/n*Math.PI*4;
+    const fi=Math.floor(i/n*data.length);
+    const amp=data[fi]/255*settings.gain;
+    const r=Math.exp(Math.cos(theta))-2*Math.cos(4*theta);
+    const x=cx+r*Math.cos(theta)*80*amp*settings.spread;
+    const y=cy+r*Math.sin(theta)*80*amp*settings.spread;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  applyGlow();
+  ctx.strokeStyle=getColor(0,1,0.9);
+  ctx.lineWidth=settings.lineWidth;
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawMandala(W,H,data) {
+  const cx=W/2,cy=H/2;
+  const slices=settings.kaleidScope;
+  for(let s=0;s<slices;s++){
+    const angle=s/slices*Math.PI*2;
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(angle);
+    const n=Math.min(data.length,80);
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const amp=data[i]/255*settings.gain;
+      const r=(i/n)*Math.min(W,H)*0.4;
+      const a=(i/n)*Math.PI/slices*2;
+      ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r*amp);
+    }
+    ctx.strokeStyle=getColor(s,slices,0.8);
+    applyGlow();
+    ctx.lineWidth=settings.lineWidth;
+    ctx.stroke();
+    ctx.restore();
+  }
+  clearGlow();
+}
+
+function drawConstellation(W,H,data) {
+  const n=Math.min(data.length,80);
+  const pts=[];
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    pts.push({
+      x:W*0.1+(W*0.8)*Math.sin(i*2.4)*0.5+W/2,
+      y:H*0.1+(H*0.8)*Math.cos(i*1.7)*0.5+H/2,
+      amp
+    });
+  }
+  // lines
+  ctx.lineWidth=settings.lineWidth*0.5;
+  for(let i=0;i<pts.length-1;i++){
+    const d=Math.hypot(pts[i].x-pts[i+1].x,pts[i].y-pts[i+1].y);
+    if(d<150){
+      ctx.beginPath(); ctx.moveTo(pts[i].x,pts[i].y); ctx.lineTo(pts[i+1].x,pts[i+1].y);
+      ctx.strokeStyle=`rgba(255,255,255,${pts[i].amp*0.3})`;
+      ctx.stroke();
+    }
+  }
+  pts.forEach((p,i)=>{
+    ctx.beginPath(); ctx.arc(p.x,p.y,settings.dotSize*p.amp,0,Math.PI*2);
+    ctx.fillStyle=getColor(i,n,p.amp);
+    applyGlow(ctx,p.amp*10);
+    ctx.fill();
+  });
+  clearGlow();
+}
+
+function drawTerrain(W,H,data) {
+  const layers=4;
+  for(let l=0;l<layers;l++){
+    ctx.beginPath();
+    ctx.moveTo(0,H);
+    const n=data.length;
+    for(let i=0;i<n;i++){
+      const amp=data[i]/255*settings.gain;
+      const x=i/n*W;
+      const y=H*(0.3+l*0.15)+Math.sin(i*0.2+t+l)*amp*H*0.2*settings.waveHeight;
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(W,H); ctx.closePath();
+    ctx.fillStyle=getColor(l,layers,0.3+l*0.15);
+    ctx.globalAlpha=0.15+l*0.1;
+    ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawPulseRings(W,H,avg) {
+  const cx=W/2,cy=H/2;
+  const maxR=Math.min(W,H)*0.45;
+  const n=8;
+  for(let i=0;i<n;i++){
+    const phase=(t*settings.rippleSpeed+i/n)%1;
+    const r=phase*maxR;
+    const alpha=(1-phase)*avg*2;
+    applyGlow(ctx,alpha*20);
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.strokeStyle=`${getColor(i,n,1).replace(')',`,${alpha})`).replace('rgb','rgba').replace('hsl','hsla')}`;
+    ctx.lineWidth=2;
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawClock(W,H,data) {
+  const cx=W/2,cy=H/2, r=Math.min(W,H)*0.4;
+  for(let i=0;i<60;i++){
+    const angle=i/60*Math.PI*2-Math.PI/2;
+    const amp=data[Math.floor(i/60*data.length)]/255*settings.gain;
+    const r0=r*0.7, r1=r*0.7+amp*r*0.3;
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(angle)*r0,cy+Math.sin(angle)*r0);
+    ctx.lineTo(cx+Math.cos(angle)*r1,cy+Math.sin(angle)*r1);
+    ctx.strokeStyle=getColor(i,60,amp);
+    ctx.lineWidth=2; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.05,0,Math.PI*2);
+  ctx.fillStyle='#fff'; ctx.fill();
+}
+
+function drawWave3D(W,H,data) {
+  const cols=settings.segments, rows=settings.segments;
+  const cw=W/cols, ch=H/rows;
+  ctx.lineWidth=settings.lineWidth*0.5;
+  for(let r=0;r<rows;r++){
+    ctx.beginPath();
+    for(let c=0;c<cols;c++){
+      const fi=Math.floor((r*cols+c)/(rows*cols)*data.length);
+      const amp=data[fi]/255*settings.gain;
+      const x=c*cw, y=r*ch-amp*H*0.3*settings.waveHeight;
+      c===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=getColor(r,rows,0.7);
+    ctx.stroke();
+  }
+}
+
+function drawFlower(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const petals=settings.branches;
+  for(let p=0;p<petals;p++){
+    const fi=Math.floor(p/petals*data.length);
+    const amp=data[fi]/255*settings.gain;
+    const angle=p/petals*Math.PI*2+t*0.2;
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(angle);
+    ctx.beginPath();
+    const len=Math.min(W,H)*0.4*amp*settings.spread;
+    ctx.ellipse(len/2,0,len/2,len/6,0,0,Math.PI*2);
+    applyGlow(ctx,amp*15);
+    ctx.fillStyle=getColor(p,petals,amp*0.5);
+    ctx.fill();
+    ctx.restore();
+  }
+  clearGlow();
+}
+
+function drawSpider(W,H,data) {
+  const cx=W/2,cy=H/2;
+  const threads=settings.branches;
+  // spokes
+  for(let i=0;i<threads;i++){
+    const angle=i/threads*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(angle)*Math.min(W,H)*0.45,cy+Math.sin(angle)*Math.min(W,H)*0.45);
+    ctx.strokeStyle='rgba(255,255,255,0.1)'; ctx.lineWidth=1; ctx.stroke();
+  }
+  // web rings
+  const rings=8;
+  for(let r=1;r<=rings;r++){
+    const fi=Math.floor(r/rings*data.length);
+    const amp=data[fi]/255*settings.gain;
+    const rad=(r/rings)*Math.min(W,H)*0.45*(1+amp*0.2);
+    ctx.beginPath();
+    for(let i=0;i<=threads;i++){
+      const angle=i/threads*Math.PI*2;
+      const x=cx+Math.cos(angle)*rad, y=cy+Math.sin(angle)*rad;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle=getColor(r,rings,amp);
+    ctx.lineWidth=settings.lineWidth;
+    applyGlow(ctx,amp*10);
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawPrism(W,H,data,avg) {
+  const n=12;
+  for(let i=0;i<n;i++){
+    const amp=data[Math.floor(i/n*data.length)]/255*settings.gain;
+    const h=colorMode===1?(i/n*360):0;
+    ctx.save();
+    ctx.translate(W/2,H/2);
+    ctx.rotate(i/n*Math.PI*2+t*0.1);
+    ctx.beginPath();
+    const s=Math.min(W,H)*0.4*amp*settings.glow;
+    ctx.rect(-s/2,-s/2,s,s);
+    ctx.strokeStyle=colorMode===1?`hsl(${h},100%,60%)`:'rgba(255,255,255,0.7)';
+    ctx.lineWidth=amp*3;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawOscilloscope(W,H) {
+  const wdata=new Uint8Array(bufferLength||2048);
+  if(analyser) analyser.getByteTimeDomainData(wdata);
+  const n=wdata.length;
+  // find zero crossing
+  let start=0;
+  for(let i=1;i<n/2;i++){
+    if(wdata[i-1]<128&&wdata[i]>=128){start=i;break;}
+  }
+  ctx.lineWidth=settings.lineWidth;
+  applyGlow();
+  ctx.beginPath();
+  for(let i=0;i<W;i++){
+    const idx=start+Math.floor(i/W*n*0.5);
+    if(idx>=n) break;
+    const v=(wdata[idx]/128-1)*settings.gain;
+    const y=H/2+v*H*0.45;
+    i===0?ctx.moveTo(0,y):ctx.lineTo(i,y);
+  }
+  ctx.strokeStyle=getColor(0,1,0.9);
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawTape(W,H,data) {
+  const speed=settings.speed;
+  const lines=6;
+  const lineH=H/(lines+1);
+  for(let l=0;l<lines;l++){
+    const y=(l+1)*lineH;
+    const n=data.length;
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const amp=data[i]/255*settings.gain;
+      const x=(i/n*W+t*50*speed)%W;
+      const dy=Math.sin(amp*Math.PI)*lineH*0.4;
+      i===0?ctx.moveTo(x,y+dy):ctx.lineTo(x,y+dy);
+    }
+    ctx.strokeStyle=getColor(l,lines,0.8);
+    ctx.lineWidth=settings.lineWidth;
+    applyGlow();
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawArcReactor(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const rings=[0.08,0.15,0.22,0.3,0.38].map(r=>r*Math.min(W,H));
+  rings.forEach((r,i)=>{
+    const amp=data[Math.floor(i/rings.length*data.length)]/255*settings.gain;
+    ctx.beginPath(); ctx.arc(cx,cy,r*(1+avg*0.1),0,Math.PI*2);
+    ctx.strokeStyle=getColor(i,rings.length,amp);
+    ctx.lineWidth=1+amp*3;
+    applyGlow(ctx,amp*25);
+    ctx.stroke();
+  });
+  // rotating segments
+  const segs=8;
+  for(let s=0;s<segs;s++){
+    const a=s/segs*Math.PI*2+t*(settings.rotation/100||0.3);
+    const amp=data[Math.floor(s/segs*data.length)]/255*settings.gain;
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(a)*rings[1],cy+Math.sin(a)*rings[1]);
+    ctx.lineTo(cx+Math.cos(a)*rings[3],cy+Math.sin(a)*rings[3]);
+    ctx.strokeStyle=getColor(s,segs,amp);
+    ctx.lineWidth=2; ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawSeismograph(W,H,data) {
+  const lines=5;
+  const lh=H/(lines+1);
+  for(let l=0;l<lines;l++){
+    const y=(l+1)*lh;
+    const fi=Math.floor(l/lines*data.length);
+    const amp=data[fi]/255*settings.gain;
+    // baseline
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y);
+    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1; ctx.stroke();
+    // signal
+    const n=data.length;
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const a=data[i]/255*settings.gain;
+      const x=(i/n*W+t*30*settings.speed)%W;
+      ctx.moveTo(x,y); ctx.lineTo(x,y-a*lh*0.45);
+    }
+    ctx.strokeStyle=getColor(l,lines,amp);
+    ctx.lineWidth=settings.lineWidth;
+    applyGlow();
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawNeonWave(W,H,data) {
+  const passes=3;
+  const wdata=new Uint8Array(bufferLength||256);
+  if(analyser) analyser.getByteTimeDomainData(wdata);
+  for(let p=0;p<passes;p++){
+    ctx.beginPath();
+    const n=wdata.length;
+    for(let i=0;i<n;i++){
+      const v=(wdata[i]/128-1)*settings.waveHeight;
+      const x=i/n*W, y=H/2+v*H*0.45 + (p-1)*4;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.shadowColor=colorMode===1?`hsl(${p*120},100%,60%)`:'#fff';
+    ctx.shadowBlur=settings.glow*20;
+    ctx.strokeStyle=getColor(p,passes,0.9);
+    ctx.lineWidth=settings.lineWidth*(1+p*0.3);
+    ctx.globalAlpha=1-p*0.2;
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  clearGlow();
+}
+
+function drawMirrorWave(W,H) {
+  const wdata=new Uint8Array(bufferLength||256);
+  if(analyser) analyser.getByteTimeDomainData(wdata);
+  const n=wdata.length;
+  for(let flip=0;flip<2;flip++){
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const v=(wdata[i]/128-1)*settings.waveHeight;
+      const x=i/n*W;
+      const y=flip===0?H/2+v*H*0.45:H/2-v*H*0.45;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    applyGlow();
+    ctx.strokeStyle=getColor(flip,2,0.9);
+    ctx.lineWidth=settings.lineWidth;
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawGlitch(W,H,data) {
+  const avg=data.reduce((a,b)=>a+b,0)/data.length/255*settings.gain;
+  const strips=12;
+  const sh=H/strips;
+  for(let s=0;s<strips;s++){
+    const amp=data[Math.floor(s/strips*data.length)]/255*settings.gain;
+    const offset=(Math.random()-0.5)*100*amp;
+    ctx.save();
+    ctx.rect(0,s*sh,W,sh);
+    ctx.clip();
+    ctx.drawImage(canvas,offset,0);
+    ctx.restore();
+    // color slice
+    ctx.fillStyle=getColor(s,strips,amp*0.1);
+    ctx.fillRect(0,s*sh,W,sh);
+  }
+  drawBars(W,H,data,false);
+}
+
+function drawMatrixBars(W,H,data) {
+  const n=Math.min(data.length,100);
+  const bw=W/n;
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const bh=amp*H;
+    const chars=Math.floor(bh/14);
+    ctx.font=`12px 'Space Mono'`;
+    ctx.fillStyle=getColor(i,n,amp);
+    applyGlow(ctx,amp*8);
+    for(let c=0;c<chars;c++){
+      const ch=String.fromCharCode(0x30A0+Math.floor(Math.random()*96));
+      ctx.fillText(ch, i*bw+bw/4, H-c*14-10);
+    }
+  }
+  clearGlow();
+}
+
+function drawComb(W,H,data) {
+  const n=data.length;
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const x=i/n*W;
+    ctx.beginPath();
+    ctx.moveTo(x,H/2+1);
+    ctx.lineTo(x,H/2-amp*H*0.45);
+    ctx.moveTo(x,H/2-1);
+    ctx.lineTo(x,H/2+amp*H*0.45);
+    ctx.strokeStyle=getColor(i,n,amp);
+    ctx.lineWidth=Math.max(0.5,(W/n)-settings.barGap);
+    ctx.stroke();
+  }
+}
+
+function drawTree(W,H,data,avg) {
+  function branch(x,y,angle,len,depth){
+    if(depth>settings.branches||len<3) return;
+    const fi=Math.floor(depth/settings.branches*data.length);
+    const amp=data[fi]/255*settings.gain;
+    const ex=x+Math.cos(angle)*len, ey=y+Math.sin(angle)*len;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(ex,ey);
+    ctx.strokeStyle=getColor(depth,settings.branches,amp);
+    ctx.lineWidth=Math.max(0.5,settings.lineWidth*(1-depth/settings.branches));
+    applyGlow(ctx,amp*10);
+    ctx.stroke();
+    const spread=0.3+avg*0.4;
+    branch(ex,ey,angle-spread,len*0.67,depth+1);
+    branch(ex,ey,angle+spread,len*0.67,depth+1);
+  }
+  branch(W/2,H,-Math.PI/2,H*0.28,0);
+  clearGlow();
+}
+
+function drawHexGrid(W,H,data) {
+  const size=30, hx=size*Math.sqrt(3), hy=size*1.5;
+  const cols=Math.ceil(W/hx)+1, rows=Math.ceil(H/hy)+1;
+  let idx=0;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const x=c*hx+(r%2)*hx/2, y=r*hy;
+      const fi=idx%data.length;
+      const amp=data[fi]/255*settings.gain;
+      ctx.beginPath();
+      for(let s=0;s<6;s++){
+        const a=s/6*Math.PI*2+Math.PI/6;
+        const px=x+Math.cos(a)*size*amp, py=y+Math.sin(a)*size;
+        s===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+      }
+      ctx.closePath();
+      ctx.strokeStyle=getColor(idx,cols*rows,amp);
+      ctx.lineWidth=1; ctx.stroke();
+      idx++;
+    }
+  }
+}
+
+function drawOrbit(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const n=Math.floor(settings.branches);
+  for(let i=0;i<n;i++){
+    const fi=Math.floor(i/n*data.length);
+    const amp=data[fi]/255*settings.gain;
+    const r=(i+1)/(n+1)*Math.min(W,H)*0.45;
+    const speed=settings.speed*(0.5+i*0.2);
+    const angle=t*speed+i*1.3;
+    const px=cx+Math.cos(angle)*r, py=cy+Math.sin(angle)*r;
+    applyGlow(ctx,amp*15);
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,255,255,0.06)`; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(px,py,settings.dotSize*(1+amp*2),0,Math.PI*2);
+    ctx.fillStyle=getColor(i,n,amp); ctx.fill();
+  }
+  clearGlow();
+}
+
+function drawBokeh(W,H,data,avg) {
+  const n=Math.min(data.length,60);
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    if(amp<0.05) continue;
+    const x=(Math.sin(i*2.1)*0.45+0.5)*W;
+    const y=(Math.cos(i*1.7)*0.45+0.5)*H;
+    const r=settings.dotSize*(3+amp*30);
+    const g=ctx.createRadialGradient(x,y,0,x,y,r);
+    g.addColorStop(0,getColor(i,n,amp*0.6));
+    g.addColorStop(1,'transparent');
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=g; ctx.fill();
+  }
+}
+
+function drawStadium(W,H,data) {
+  const n=Math.min(data.length,80);
+  const bw=W/n;
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const bh=amp*H*0.8;
+    // from center out
+    const x=W/2+(i-n/2)*(bw+settings.barGap);
+    ctx.fillStyle=getColor(i,n,amp);
+    applyGlow(ctx,amp*10);
+    ctx.fillRect(x,H/2-bh/2,bw-settings.barGap,bh);
+  }
+  clearGlow();
+}
+
+function drawBarcode(W,H,data) {
+  const n=data.length;
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const x=i/n*W;
+    const bw=W/n;
+    ctx.fillStyle=getColor(i,n,amp);
+    ctx.fillRect(x,0,bw,H);
+  }
+}
+
+function drawHalo(W,H,avg) {
+  const cx=W/2,cy=H/2;
+  const n=5;
+  for(let i=0;i<n;i++){
+    const phase=(t*0.5+i/n)%1;
+    const r=phase*Math.min(W,H)*0.48;
+    const alpha=(1-phase)*avg;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,255,255,${alpha})`;
+    ctx.lineWidth=4*(1-phase);
+    applyGlow(ctx,alpha*30);
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawWaveRing(W,H,data) {
+  const cx=W/2,cy=H/2;
+  const r=Math.min(W,H)*0.3;
+  const n=data.length;
+  ctx.beginPath();
+  for(let i=0;i<=n;i++){
+    const amp=data[i%n]/255*settings.gain;
+    const angle=i/n*Math.PI*2+settings.rotation*Math.PI/180;
+    const rr=r*(1+amp*0.5);
+    ctx.lineTo(cx+Math.cos(angle)*rr,cy+Math.sin(angle)*rr);
+  }
+  ctx.closePath();
+  applyGlow();
+  ctx.strokeStyle=getColor(0,1,0.9);
+  ctx.lineWidth=settings.lineWidth;
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawCross(W,H,data) {
+  const cx=W/2,cy=H/2;
+  const dirs=[0,Math.PI/2,Math.PI,Math.PI*1.5];
+  dirs.forEach((dir,di)=>{
+    ctx.beginPath();
+    const n=Math.min(data.length,100);
+    for(let i=0;i<n;i++){
+      const amp=data[i]/255*settings.gain;
+      const dist=i/n*Math.min(W,H)*0.5;
+      const spread=Math.sin(i/n*Math.PI)*amp*80;
+      const x=cx+Math.cos(dir)*dist + Math.cos(dir+Math.PI/2)*spread*0.3;
+      const y=cy+Math.sin(dir)*dist + Math.sin(dir+Math.PI/2)*spread*0.3;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    applyGlow();
+    ctx.strokeStyle=getColor(di,4,0.9);
+    ctx.lineWidth=settings.lineWidth;
+    ctx.stroke();
+  });
+  clearGlow();
+}
+
+function drawSnowflake(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const arms=settings.branches;
+  for(let a=0;a<arms;a++){
+    const angle=a/arms*Math.PI*2;
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(angle);
+    const n=10;
+    for(let i=0;i<n;i++){
+      const amp=data[Math.floor(i/n*data.length)]/255*settings.gain;
+      const len=i/n*Math.min(W,H)*0.45*amp;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(len,0);
+      ctx.strokeStyle=getColor(a,arms,amp);
+      ctx.lineWidth=settings.lineWidth; ctx.stroke();
+      // branches
+      if(i>0){
+        ctx.beginPath(); ctx.moveTo(len*0.5,0);
+        ctx.lineTo(len*0.5-10*amp,10*amp);
+        ctx.moveTo(len*0.5,0);
+        ctx.lineTo(len*0.5-10*amp,-10*amp);
+        ctx.strokeStyle=getColor(a,arms,amp*0.5);
+        ctx.lineWidth=1; ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+function drawShockwave(W,H,avg) {
+  const cx=W/2,cy=H/2;
+  for(let i=0;i<5;i++){
+    const phase=((t*settings.glow+i*0.2)%1);
+    const r=phase*Math.min(W,H)*0.5;
+    const alpha=(1-phase)*avg*1.5;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,255,255,${alpha})`;
+    ctx.lineWidth=3*(1-phase)*5;
+    ctx.stroke();
+  }
+}
+
+function drawRadar(W,H,data,avg) {
+  const cx=W/2,cy=H/2, r=Math.min(W,H)*0.45;
+  // rings
+  for(let i=1;i<=4;i++){
+    ctx.beginPath(); ctx.arc(cx,cy,r*i/4,0,Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1; ctx.stroke();
+  }
+  // sweep
+  const angle=t*settings.rotation*0.02;
+  const g=ctx.createConicalGradient?ctx.createConicalGradient(cx,cy,angle-0.5):null;
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.arc(cx,cy,r,angle-0.8,angle);
+  ctx.closePath();
+  ctx.fillStyle=`rgba(255,255,255,0.04)`;
+  ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx,cy);
+  ctx.lineTo(cx+Math.cos(angle)*r,cy+Math.sin(angle)*r);
+  ctx.strokeStyle=getColor(0,1,0.9); ctx.lineWidth=2; ctx.stroke();
+  // blips
+  const n=Math.min(data.length,100);
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    if(amp>0.3){
+      const a=i/n*Math.PI*2, dist=amp*r;
+      ctx.beginPath(); ctx.arc(cx+Math.cos(a)*dist,cy+Math.sin(a)*dist,3,0,Math.PI*2);
+      ctx.fillStyle=getColor(i,n,amp); ctx.fill();
+    }
+  }
+}
+
+function drawVinyl(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const r=Math.min(W,H)*0.45;
+  // grooves
+  for(let i=2;i<30;i++){
+    const fi=Math.floor(i/30*data.length);
+    const amp=data[fi]/255*settings.gain;
+    const rr=r*(i/30)*(1+amp*0.03);
+    ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,255,255,${0.03+amp*0.1})`;
+    ctx.lineWidth=1; ctx.stroke();
+  }
+  // label
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(t*0.5);
+  ctx.beginPath(); ctx.arc(0,0,r*0.25,0,Math.PI*2);
+  ctx.fillStyle=getColor(0,1,avg); ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2);
+  ctx.fillStyle='#000'; ctx.fill();
+}
+
+function drawRain(W,H,data) {
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.fillRect(0,0,W,H);
+  const n=Math.min(data.length,W/3);
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    if(!rain_drops) rain_drops=[];
+    if(!rain_drops[i]){
+      rain_drops[i]={x:(i/n)*W, y:0, speed:2+Math.random()*3};
+    }
+    rain_drops[i].y+=rain_drops[i].speed*settings.speed*(1+amp);
+    if(rain_drops[i].y>H) rain_drops[i].y=0;
+    ctx.beginPath();
+    ctx.moveTo(rain_drops[i].x,rain_drops[i].y);
+    ctx.lineTo(rain_drops[i].x,rain_drops[i].y+15*amp);
+    ctx.strokeStyle=getColor(i,n,amp);
+    ctx.lineWidth=1.5; ctx.stroke();
+  }
+}
+let rain_drops=null;
+
+function drawBubbles(W,H,data,avg) {
+  if(!bubble_list) bubble_list=[];
+  const n=Math.min(data.length,20);
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    if(!bubble_list[i]){
+      bubble_list[i]={x:Math.random()*W, y:H, r:5+Math.random()*20, speed:0.5+Math.random()};
+    }
+    bubble_list[i].y-=bubble_list[i].speed*settings.speed*(0.5+amp);
+    if(bubble_list[i].y<-50) bubble_list[i].y=H+50;
+    const r=bubble_list[i].r*(1+amp*settings.dotSize*0.2);
+    ctx.beginPath(); ctx.arc(bubble_list[i].x,bubble_list[i].y,r,0,Math.PI*2);
+    ctx.strokeStyle=getColor(i,n,amp);
+    applyGlow(ctx,amp*10);
+    ctx.lineWidth=1.5; ctx.stroke();
+  }
+  clearGlow();
+}
+let bubble_list=null;
+
+function drawVortex(W,H,data) {
+  const cx=W/2,cy=H/2;
+  const n=data.length;
+  ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const angle=i/n*Math.PI*2*settings.spiralTurns+t;
+    const r=(i/n)*Math.min(W,H)*0.47*amp;
+    ctx.lineTo(cx+Math.cos(angle)*r,cy+Math.sin(angle)*r);
+  }
+  applyGlow();
+  if(colorMode===1){const g=ctx.createLinearGradient(0,0,W,H);for(let s=0;s<=1;s+=0.1)g.addColorStop(s,`hsl(${s*360},100%,60%)`);ctx.strokeStyle=g;}
+  else ctx.strokeStyle=getColor(0,1,0.9);
+  ctx.lineWidth=settings.lineWidth;
+  ctx.stroke();
+  clearGlow();
+}
+
+function drawCrystal(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const n=settings.branches;
+  for(let i=0;i<n;i++){
+    const amp=data[Math.floor(i/n*data.length)]/255*settings.gain;
+    const a=i/n*Math.PI*2;
+    const r=Math.min(W,H)*0.4*amp;
+    const pts=[[cx,cy],[cx+Math.cos(a)*r,cy+Math.sin(a)*r],
+               [cx+Math.cos(a+0.3)*r*0.6,cy+Math.sin(a+0.3)*r*0.6]];
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0],pts[0][1]);
+    pts.forEach(p=>ctx.lineTo(p[0],p[1]));
+    ctx.closePath();
+    ctx.strokeStyle=getColor(i,n,amp);
+    applyGlow(ctx,amp*20);
+    ctx.lineWidth=settings.lineWidth;
+    ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawRipple(W,H,avg) {
+  const cx=W/2,cy=H/2;
+  if(!ripple_rings) ripple_rings=[];
+  if(avg>0.1){
+    ripple_rings.push({r:0,alpha:avg,speed:settings.rippleSpeed*3});
+  }
+  ripple_rings=ripple_rings.filter(r=>r.alpha>0.01);
+  ripple_rings.forEach(ring=>{
+    ring.r+=ring.speed;
+    ring.alpha*=0.97;
+    ctx.beginPath(); ctx.arc(cx,cy,ring.r,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,255,255,${ring.alpha})`;
+    ctx.lineWidth=2;
+    applyGlow(ctx,ring.alpha*20);
+    ctx.stroke();
+  });
+  clearGlow();
+}
+let ripple_rings=null;
+
+function drawFountain(W,H,data,avg) {
+  if(!fountain_pts) fountain_pts=[];
+  const spawn=Math.floor(avg*10);
+  for(let s=0;s<spawn;s++){
+    const i=Math.floor(Math.random()*data.length);
+    fountain_pts.push({
+      x:W/2+(Math.random()-0.5)*50*settings.spread,
+      y:H*0.8,
+      vx:(Math.random()-0.5)*8*settings.spread,
+      vy:-(4+Math.random()*6)*settings.gain,
+      life:1,
+      color:getColor(i,data.length,data[i]/255),
+    });
+  }
+  fountain_pts=fountain_pts.filter(p=>p.life>0.01);
+  fountain_pts.forEach(p=>{
+    p.x+=p.vx*settings.speed; p.y+=p.vy*settings.speed;
+    p.vy+=0.15; p.life*=settings.decay;
+    ctx.beginPath(); ctx.arc(p.x,p.y,settings.dotSize*p.life,0,Math.PI*2);
+    ctx.fillStyle=p.color; ctx.globalAlpha=p.life;
+    applyGlow(ctx,p.life*settings.glow*10);
+    ctx.fill();
+  });
+  ctx.globalAlpha=1; clearGlow();
+}
+let fountain_pts=null;
+
+function drawDiamond(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const n=Math.min(data.length,60);
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const r=(i/n)*Math.min(W,H)*0.47*(1+avg*0.1);
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(i*0.1+t*0.05);
+    ctx.beginPath();
+    ctx.moveTo(0,-r); ctx.lineTo(r*0.6,0); ctx.lineTo(0,r); ctx.lineTo(-r*0.6,0);
+    ctx.closePath();
+    ctx.strokeStyle=getColor(i,n,amp);
+    ctx.lineWidth=settings.lineWidth*amp;
+    applyGlow(ctx,amp*settings.glow*15);
+    ctx.stroke();
+    ctx.restore();
+  }
+  clearGlow();
+}
+
+function drawEclipse(W,H,avg) {
+  const cx=W/2,cy=H/2, r=Math.min(W,H)*0.3;
+  for(let i=5;i>0;i--){
+    const offset=i*10*avg;
+    ctx.beginPath(); ctx.arc(cx-offset,cy,r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(0,0,0,0.8)`; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+offset,cy,r,0,Math.PI*2);
+    ctx.fillStyle=getColor(i,5,avg*(1-i/5)*0.3); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    applyGlow(ctx,avg*40);
+    ctx.strokeStyle=getColor(i,5,avg); ctx.lineWidth=1; ctx.stroke();
+  }
+  clearGlow();
+}
+
+function drawHorizon(W,H,data) {
+  const n=data.length;
+  const layers=5;
+  for(let l=0;l<layers;l++){
+    ctx.beginPath();
+    ctx.moveTo(0,H);
+    for(let i=0;i<n;i++){
+      const amp=data[i]/255*settings.gain;
+      const x=i/n*W;
+      const y=H*(0.2+l*0.12)+(1-amp)*H*0.1*settings.waveHeight;
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(W,H); ctx.closePath();
+    ctx.fillStyle=getColor(l,layers,0.2);
+    ctx.globalAlpha=0.2;
+    ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawComet(W,H,data,avg) {
+  if(!comets) comets=[];
+  if(avg>0.15&&Math.random()<0.1){
+    comets.push({x:Math.random()*W,y:0,vx:(Math.random()-0.5)*5,vy:3+Math.random()*5,tail:[],color:getColor(Math.floor(Math.random()*100),100,avg)});
+  }
+  comets=comets.filter(c=>c.y<H+50);
+  comets.forEach(c=>{
+    c.x+=c.vx*settings.speed; c.y+=c.vy*settings.speed;
+    c.tail.push({x:c.x,y:c.y});
+    if(c.tail.length>20) c.tail.shift();
+    ctx.beginPath();
+    c.tail.forEach((pt,i)=>{
+      const alpha=i/c.tail.length;
+      i===0?ctx.moveTo(pt.x,pt.y):ctx.lineTo(pt.x,pt.y);
+    });
+    ctx.strokeStyle=c.color; ctx.lineWidth=3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(c.x,c.y,settings.glow*3,0,Math.PI*2);
+    ctx.fillStyle='#fff'; ctx.fill();
+  });
+}
+let comets=null;
+
+function drawAtomic(W,H,data,avg) {
+  const cx=W/2,cy=H/2;
+  const orbits=settings.branches;
+  for(let o=0;o<orbits;o++){
+    const r=Math.min(W,H)*(0.1+o*0.07);
+    const tilt=o/orbits*Math.PI;
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(tilt);
+    ctx.beginPath(); ctx.ellipse(0,0,r,r*0.35,0,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,255,255,0.1)`; ctx.lineWidth=1; ctx.stroke();
+    const amp=data[Math.floor(o/orbits*data.length)]/255*settings.gain;
+    const a=t*settings.rotation*0.01*(o+1);
+    const ex=Math.cos(a)*r, ey=Math.sin(a)*r*0.35;
+    ctx.beginPath(); ctx.arc(ex,ey,6*(1+amp),0,Math.PI*2);
+    ctx.fillStyle=getColor(o,orbits,amp);
+    applyGlow(ctx,amp*20); ctx.fill();
+    ctx.restore();
+  }
+  ctx.beginPath(); ctx.arc(cx,cy,8+avg*20,0,Math.PI*2);
+  ctx.fillStyle='#fff'; applyGlow(ctx,avg*30); ctx.fill();
+  clearGlow();
+}
+
+function drawNebula(W,H,data,avg) {
+  ctx.fillStyle='rgba(0,0,0,0.05)'; ctx.fillRect(0,0,W,H);
+  const n=Math.min(settings.particleCount,data.length);
+  for(let i=0;i<n;i++){
+    const amp=data[i]/255*settings.gain;
+    const x=(Math.sin(i*1.3+t*0.2)*0.5+0.5)*W;
+    const y=(Math.cos(i*0.9+t*0.15)*0.5+0.5)*H;
+    const r=amp*settings.glow*30;
+    if(r<1) continue;
+    const g=ctx.createRadialGradient(x,y,0,x,y,r);
+    g.addColorStop(0,getColor(i,n,amp*0.5));
+    g.addColorStop(1,'transparent');
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=g; ctx.fill();
+  }
+}
+
+// ── INPUT HANDLERS ────────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (micStream) { micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+  if (source) source.disconnect();
+  const buf = await file.arrayBuffer();
+  const decoded = await audioCtx.decodeAudioData(buf);
+  source = audioCtx.createBufferSource();
+  source.buffer = decoded;
+  source.loop = true;
+  initAnalyser(source);
+  source.start();
+  document.getElementById('fileBtn').classList.add('active');
+  document.getElementById('micBtn').classList.remove('active');
+});
+
+document.getElementById('micBtn').addEventListener('click', async () => {
+  if (micStream) {
+    micStream.getTracks().forEach(t=>t.stop()); micStream=null;
+    if (source) source.disconnect();
+    document.getElementById('micBtn').classList.remove('active');
+    document.getElementById('statusDot').classList.remove('active');
+    document.getElementById('statusText').textContent='NO INPUT';
+    document.getElementById('overlay').classList.remove('hidden');
+    isActive=false; return;
+  }
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    if (source) { source.disconnect(); source=null; }
+    source = audioCtx.createMediaStreamSource(micStream);
+    initAnalyser(source);
+    analyser.connect = ()=>{}; // don't route mic to speakers
+    source.connect(analyser);
+    document.getElementById('micBtn').classList.add('active');
+    document.getElementById('fileBtn').classList.remove('active');
+  } catch(err) {
+    alert('Microphone access denied: ' + err.message);
+  }
+});
+
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  document.getElementById('settingsPanel').classList.toggle('open');
+});
+
+document.getElementById('colorBtn').addEventListener('click', () => {
+  colorMode=(colorMode+1)%4;
+  const labels=['◻ White','◈ Rainbow','◫ Greyscale','◪ Inverted'];
+  document.getElementById('colorBtn').textContent=labels[colorMode];
+  buildSettings();
+});
+
+// Start idle animation
+if (!animId) draw();
+</script>
+</body>
+</html>
